@@ -18,17 +18,16 @@ BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
 FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
 
 jobs:
-
 docker:
 name: Build and Push Images
 runs-on: ubuntu-latest
 
+```
 outputs:
   build_tag: ${{ steps.image-tag.outputs.build_tag }}
   sha_tag: ${{ steps.image-tag.outputs.sha_tag }}
 
 steps:
-
   - name: Checkout source repository
     uses: actions/checkout@v6
 
@@ -77,25 +76,20 @@ steps:
 
   - name: Print published images
     run: |
-      echo "============================================"
-      echo "IMAGES PUBLISHED"
-      echo "============================================"
-      echo ""
       echo "Backend:"
       echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
-      echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
       echo ""
       echo "Frontend:"
       echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
-      echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
+```
 
 update-gitops:
 name: Update GitOps Repository
 needs: docker
 runs-on: ubuntu-latest
 
+```
 steps:
-
   - name: Checkout GitOps repository
     uses: actions/checkout@v6
     with:
@@ -132,7 +126,7 @@ steps:
       git add k8s/backend-deployment.yaml k8s/frontend-deployment.yaml
 
       if git diff --cached --quiet; then
-        echo "No GitOps changes detected."
+        echo "No changes detected."
         exit 0
       fi
 
@@ -149,8 +143,11 @@ steps:
       echo "GITOPS DEPLOYMENT TRIGGERED"
       echo "============================================"
       echo ""
-      echo "Backend: ${{ env.BACKEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
-      echo "Frontend: ${{ env.FRONTEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+      echo "Backend:"
+      echo "${{ env.BACKEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+      echo ""
+      echo "Frontend:"
+      echo "${{ env.FRONTEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
       echo ""
       echo "Argo CD will detect the GitOps commit."
-      echo "Rollback is possible by reverting the GitOps commit."
+```
