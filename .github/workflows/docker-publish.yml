@@ -1,3 +1,4 @@
+```yaml
 name: Build Push and Deploy
 
 on:
@@ -17,10 +18,10 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_OWNER: devendra-5470
-  GITOPS_REPO: DEVENDRA-5470/hireflow-gitops
-  BACKEND_IMAGE: ghcr.io/devendra-5470/hireflow-backend
-  FRONTEND_IMAGE: ghcr.io/devendra-5470/hireflow-frontend
+  IMAGE_OWNER: yashgarg2907
+  GITOPS_REPO: yashgarg2907/hireflow-gitops
+  BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
+  FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
 
 jobs:
 
@@ -145,13 +146,13 @@ jobs:
       - name: Update backend image
         run: |
           sed -i \
-            "s|image: ghcr.io/devendra-5470/hireflow-backend:.*|image: ghcr.io/devendra-5470/hireflow-backend:${{ needs.docker.outputs.build_tag }}|" \
+            "s|image: ghcr.io/yashgarg2907/hireflow-backend:.*|image: ghcr.io/yashgarg2907/hireflow-backend:${{ needs.docker.outputs.build_tag }}|" \
             gitops/k8s/backend-deployment.yaml
 
       - name: Update frontend image
         run: |
           sed -i \
-            "s|image: ghcr.io/devendra-5470/hireflow-frontend:.*|image: ghcr.io/devendra-5470/hireflow-frontend:${{ needs.docker.outputs.build_tag }}|" \
+            "s|image: ghcr.io/yashgarg2907/hireflow-frontend:.*|image: ghcr.io/yashgarg2907/hireflow-frontend:${{ needs.docker.outputs.build_tag }}|" \
             gitops/k8s/frontend-deployment.yaml
 
       - name: Show GitOps changes
@@ -224,3 +225,4 @@ jobs:
 
           echo ""
           echo "Rollback is possible by reverting the GitOps commit."
+```
