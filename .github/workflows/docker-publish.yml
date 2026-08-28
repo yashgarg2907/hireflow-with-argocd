@@ -108,6 +108,7 @@ jobs:
           echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
           echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
 
+
   update-gitops:
 
     name: Update GitOps Repository
