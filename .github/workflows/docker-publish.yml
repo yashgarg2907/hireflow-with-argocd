@@ -1,229 +1,215 @@
-```yaml
 name: Build Push and Deploy
 
 on:
-  push:
-    branches:
-      - main
+push:
+branches:
+- main
 
-  workflow_dispatch:
+workflow_dispatch:
 
 concurrency:
-  group: hireflow-main
-  cancel-in-progress: false
+group: hireflow-main
+cancel-in-progress: false
 
 permissions:
-  contents: read
-  packages: write
+contents: read
+packages: write
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_OWNER: yashgarg2907
-  GITOPS_REPO: yashgarg2907/hireflow-gitops
-  BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
-  FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
+REGISTRY: ghcr.io
+IMAGE_OWNER: yashgarg2907
+GITOPS_REPO: yashgarg2907/hireflow-gitops
+BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
+FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
 
 jobs:
 
-  docker:
+docker:
+name: Build and Push Images
+runs-on: ubuntu-latest
 
-    name: Build and Push Images
+```
+outputs:
+  build_tag: ${{ steps.image-tag.outputs.build_tag }}
+  sha_tag: ${{ steps.image-tag.outputs.sha_tag }}
 
-    runs-on: ubuntu-latest
+steps:
 
-    outputs:
-      build_tag: ${{ steps.image-tag.outputs.build_tag }}
-      sha_tag: ${{ steps.image-tag.outputs.sha_tag }}
+  - name: Checkout source repository
+    uses: actions/checkout@v6
 
-    steps:
+  - name: Generate image tags
+    id: image-tag
+    run: |
+      echo "build_tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      echo "sha_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout source repository
-        uses: actions/checkout@v6
+  - name: Display image tags
+    run: |
+      echo "Build tag: build-${{ github.run_number }}"
+      echo "SHA tag: ${GITHUB_SHA}"
 
-      - name: Generate image tags
-        id: image-tag
-        run: |
-          echo "build_tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+  - name: Set up Docker Buildx
+    uses: docker/setup-buildx-action@v4
 
-      - name: Display image tags
-        run: |
-          echo "Build tag: build-${{ github.run_number }}"
-          echo "SHA tag: ${GITHUB_SHA}"
+  - name: Log in to GitHub Container Registry
+    uses: docker/login-action@v4
+    with:
+      registry: ${{ env.REGISTRY }}
+      username: ${{ github.actor }}
+      password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+  - name: Build and push backend
+    uses: docker/build-push-action@v7
+    with:
+      context: ./backend
+      file: ./backend/Dockerfile
+      push: true
+      tags: |
+        ${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}
+        ${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}
+      cache-from: type=gha,scope=backend
+      cache-to: type=gha,mode=max,scope=backend
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  - name: Build and push frontend
+    uses: docker/build-push-action@v7
+    with:
+      context: ./frontend
+      file: ./frontend/Dockerfile
+      push: true
+      build-args: |
+        VITE_API_URL=${{ vars.VITE_API_URL }}
+      tags: |
+        ${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}
+        ${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}
+      cache-from: type=gha,scope=frontend
+      cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Build and push backend
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
+  - name: Print published images
+    run: |
+      echo "============================================"
+      echo "IMAGES PUBLISHED"
+      echo "============================================"
+      echo ""
+      echo "Backend:"
+      echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
+      echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
+      echo ""
+      echo "Frontend:"
+      echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
+      echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
+```
 
-          tags: |
-            ${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}
-            ${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}
+update-gitops:
+name: Update GitOps Repository
+needs: docker
+runs-on: ubuntu-latest
 
-          cache-from: type=gha,scope=backend
-          cache-to: type=gha,mode=max,scope=backend
+```
+permissions:
+  contents: read
 
-      - name: Build and push frontend
-        uses: docker/build-push-action@v7
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
+steps:
 
-          build-args: |
-            VITE_API_URL=${{ vars.VITE_API_URL }}
+  - name: Checkout GitOps repository
+    uses: actions/checkout@v6
+    with:
+      repository: ${{ env.GITOPS_REPO }}
+      token: ${{ secrets.GITOPS_TOKEN }}
+      path: gitops
+      ref: main
+      persist-credentials: true
+      fetch-depth: 0
 
-          tags: |
-            ${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}
-            ${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}
+  - name: Verify GitOps token access
+    working-directory: gitops
+    run: |
+      git remote -v
+      git ls-remote origin main
 
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
+  - name: Configure Git identity
+    working-directory: gitops
+    run: |
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Print published images
-        run: |
-          echo "============================================"
-          echo "IMAGES PUBLISHED"
-          echo "============================================"
+  - name: Update backend image
+    run: |
+      sed -i \
+        "s|image: ghcr.io/yashgarg2907/hireflow-backend:.*|image: ghcr.io/yashgarg2907/hireflow-backend:${{ needs.docker.outputs.build_tag }}|" \
+        gitops/k8s/backend-deployment.yaml
 
-          echo ""
-          echo "Backend:"
-          echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
-          echo "${{ env.BACKEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
+  - name: Update frontend image
+    run: |
+      sed -i \
+        "s|image: ghcr.io/yashgarg2907/hireflow-frontend:.*|image: ghcr.io/yashgarg2907/hireflow-frontend:${{ needs.docker.outputs.build_tag }}|" \
+        gitops/k8s/frontend-deployment.yaml
 
-          echo ""
-          echo "Frontend:"
-          echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.build_tag }}"
-          echo "${{ env.FRONTEND_IMAGE }}:${{ steps.image-tag.outputs.sha_tag }}"
+  - name: Show GitOps changes
+    working-directory: gitops
+    run: |
+      git diff
 
+  - name: Commit GitOps changes
+    working-directory: gitops
+    run: |
+      git add \
+        k8s/backend-deployment.yaml \
+        k8s/frontend-deployment.yaml
 
-  update-gitops:
+      if git diff --cached --quiet; then
+        echo "No GitOps changes detected."
+        echo "CHANGED=false" >> "$GITHUB_ENV"
+        exit 0
+      fi
 
-    name: Update GitOps Repository
+      git commit -m "deploy: build ${{ needs.docker.outputs.build_tag }}"
+      echo "CHANGED=true" >> "$GITHUB_ENV"
 
-    needs: docker
+  - name: Push GitOps changes with retry
+    working-directory: gitops
+    run: |
+      if [ "${CHANGED}" != "true" ]; then
+        echo "Nothing to push."
+        exit 0
+      fi
 
-    runs-on: ubuntu-latest
+      for attempt in 1 2 3 4 5; do
+        echo "Push attempt ${attempt}/5"
 
-    permissions:
-      contents: read
+        git fetch origin main
 
-    steps:
-
-      - name: Checkout GitOps repository
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ env.GITOPS_REPO }}
-          token: ${{ secrets.GITOPS_TOKEN }}
-          path: gitops
-          ref: main
-          persist-credentials: true
-          fetch-depth: 0
-
-      - name: Verify GitOps token access
-        working-directory: gitops
-        run: |
-          git remote -v
-          git ls-remote origin main
-
-      - name: Configure Git identity
-        working-directory: gitops
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Update backend image
-        run: |
-          sed -i \
-            "s|image: ghcr.io/yashgarg2907/hireflow-backend:.*|image: ghcr.io/yashgarg2907/hireflow-backend:${{ needs.docker.outputs.build_tag }}|" \
-            gitops/k8s/backend-deployment.yaml
-
-      - name: Update frontend image
-        run: |
-          sed -i \
-            "s|image: ghcr.io/yashgarg2907/hireflow-frontend:.*|image: ghcr.io/yashgarg2907/hireflow-frontend:${{ needs.docker.outputs.build_tag }}|" \
-            gitops/k8s/frontend-deployment.yaml
-
-      - name: Show GitOps changes
-        working-directory: gitops
-        run: |
-          git diff
-
-      - name: Commit GitOps changes
-        working-directory: gitops
-        run: |
-          git add \
-            k8s/backend-deployment.yaml \
-            k8s/frontend-deployment.yaml
-
-          if git diff --cached --quiet; then
-            echo "No GitOps changes detected."
-            echo "CHANGED=false" >> "$GITHUB_ENV"
-            exit 0
-          fi
-
-          git commit \
-            -m "deploy: build ${{ needs.docker.outputs.build_tag }}"
-
-          echo "CHANGED=true" >> "$GITHUB_ENV"
-
-      - name: Push GitOps changes with retry
-        working-directory: gitops
-        run: |
-          if [ "${CHANGED}" != "true" ]; then
-            echo "Nothing to push."
-            exit 0
-          fi
-
-          for attempt in 1 2 3 4 5; do
-
-            echo "Push attempt ${attempt}/5"
-
-            git fetch origin main
-            git rebase origin/main
-
-            if git push origin HEAD:main; then
-              echo "GitOps repository updated successfully."
-              exit 0
-            fi
-
-            echo "Push failed. Retrying..."
-            sleep $((attempt * 3))
-
-          done
-
-          echo "ERROR: Failed to push GitOps changes after 5 attempts."
+        if ! git rebase origin/main; then
+          echo "Rebase failed."
+          git rebase --abort
           exit 1
+        fi
 
-      - name: Deployment summary
-        run: |
-          echo "============================================"
-          echo "GITOPS DEPLOYMENT TRIGGERED"
-          echo "============================================"
+        if git push origin HEAD:main; then
+          echo "GitOps repository updated successfully."
+          exit 0
+        fi
 
-          echo ""
-          echo "Backend image:"
-          echo "${{ env.BACKEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+        echo "Push failed. Retrying..."
+        sleep $((attempt * 3))
+      done
 
-          echo ""
-          echo "Frontend image:"
-          echo "${{ env.FRONTEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+      echo "ERROR: Failed to push GitOps changes after 5 attempts."
+      exit 1
 
-          echo ""
-          echo "Argo CD will detect the GitOps commit."
-
-          echo ""
-          echo "Rollback is possible by reverting the GitOps commit."
+  - name: Deployment summary
+    run: |
+      echo "============================================"
+      echo "GITOPS DEPLOYMENT TRIGGERED"
+      echo "============================================"
+      echo ""
+      echo "Backend image:"
+      echo "${{ env.BACKEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+      echo ""
+      echo "Frontend image:"
+      echo "${{ env.FRONTEND_IMAGE }}:${{ needs.docker.outputs.build_tag }}"
+      echo ""
+      echo "Argo CD will detect the GitOps commit."
+      echo ""
+      echo "Rollback is possible by reverting the GitOps commit."
 ```
