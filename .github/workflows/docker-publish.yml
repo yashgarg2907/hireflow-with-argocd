@@ -11,11 +11,11 @@ contents: read
 packages: write
 
 env:
-REGISTRY: ghcr.io
-IMAGE_OWNER: yashgarg2907
-GITOPS_REPO: yashgarg2907/hireflow-gitops
-BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
-FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: yashgarg2907
+  GITOPS_REPO: yashgarg2907/hireflow-gitops
+  BACKEND_IMAGE: ghcr.io/yashgarg2907/hireflow-backend
+  FRONTEND_IMAGE: ghcr.io/yashgarg2907/hireflow-frontend
 
 jobs:
 docker:
